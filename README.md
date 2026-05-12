@@ -258,3 +258,5 @@ Got questions? Open an issue on GitHub or check:
 ---
 
 **Happy analyzing! ⚽📊**
+
+<!-- deploy-trigger: 2026-05-12T00:00:00Z -->
