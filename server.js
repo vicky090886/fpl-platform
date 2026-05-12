@@ -14,10 +14,10 @@ app.use(cors());
 app.use(express.json());
 
 // Proxy endpoint for API requests
-app.get('/api/*', async (req, res) => {
+app.get(/^\/api\/(.+)/, async (req, res) => {
   try {
-    const path = req.params[0];
-    const url = `https://fantasy.premierleague.com/api/${path}`;
+    const apiPath = req.params[0];
+    const url = `https://fantasy.premierleague.com/api/${apiPath}`;
 
     console.log(`Proxying request to: ${url}`);
 
