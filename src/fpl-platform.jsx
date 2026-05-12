@@ -599,17 +599,27 @@ function Dashboard({ fplData, fixtures }) {
 function PlayersPage({ fplData }) {
   const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState("ALL");
+  const [teamFilter, setTeamFilter] = useState("ALL");
   const [sortBy, setSortBy] = useState("total_points");
+  const [sortOrder, setSortOrder] = useState("desc");
   if (!fplData) return <LoadingSkeleton />;
   const { elements, teams } = fplData;
   const posMap = { 1: "GKP", 2: "DEF", 3: "MID", 4: "FWD" };
+  const mult = sortOrder === "desc" ? -1 : 1;
+  const sortedBy = (a, b) => {
+    if (sortBy === "total_points") return (a.total_points - b.total_points) * mult;
+    if (sortBy === "form") return (parseFloat(a.form) - parseFloat(b.form)) * mult;
+    if (sortBy === "price") return (a.now_cost - b.now_cost) * mult;
+    return (parseFloat(a.selected_by_percent) - parseFloat(b.selected_by_percent)) * mult;
+  };
   const filtered = (elements || [])
     .filter(p => {
       const ms = p.web_name.toLowerCase().includes(search.toLowerCase()) || p.first_name.toLowerCase().includes(search.toLowerCase());
       const mp = posFilter === "ALL" || posMap[p.element_type] === posFilter;
-      return ms && mp;
+      const mt = teamFilter === "ALL" || String(p.team) === teamFilter;
+      return ms && mp && mt;
     })
-    .sort((a, b) => sortBy === "total_points" ? b.total_points - a.total_points : sortBy === "form" ? parseFloat(b.form) - parseFloat(a.form) : sortBy === "price" ? b.now_cost - a.now_cost : parseFloat(b.selected_by_percent) - parseFloat(a.selected_by_percent))
+    .sort(sortedBy)
     .slice(0, 50);
 
   return (
@@ -632,6 +642,14 @@ function PlayersPage({ fplData }) {
           <option value="price">Sort: Price</option>
           <option value="ownership">Sort: Ownership</option>
         </select>
+        <select onChange={e => setTeamFilter(e.target.value)} value={teamFilter} style={{ background: "#111315", border: `1px solid rgba(244,161,0,0.25)`, borderRadius: 10, padding: "10px 14px", color: WHITE, fontSize: 12, cursor: "pointer" }}>
+          <option value="ALL">Team: All</option>
+          {(teams || []).map((t) => <option key={t.id} value={String(t.id)}>{t.short_name}</option>)}
+        </select>
+        <select onChange={e => setSortOrder(e.target.value)} value={sortOrder} style={{ background: "#111315", border: `1px solid rgba(244,161,0,0.25)`, borderRadius: 10, padding: "10px 14px", color: WHITE, fontSize: 12, cursor: "pointer" }}>
+          <option value="desc">High to Low</option>
+          <option value="asc">Low to High</option>
+        </select>
       </motion.div>
       <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 60px 55px 55px 50px 80px", gap: 10, padding: "8px 16px", marginBottom: 6, background: "rgba(244,161,0,0.05)", borderRadius: 8 }}>
         {["", "Player", "Price", "Pts", "Form", "Own%", "Trend"].map((h, i) => (
@@ -646,6 +664,7 @@ function PlayersPage({ fplData }) {
 // ── TEAMS PAGE ────────────────────────────────────────────────
 function TeamsPage({ fplData }) {
   const [selectedTeamId, setSelectedTeamId] = useState(null);
+  const top10Ref = useRef(null);
   if (!fplData) return <LoadingSkeleton />;
   const { teams, elements } = fplData;
   const selectedTeam = teams?.find((t) => t.id === selectedTeamId) || null;
@@ -665,7 +684,10 @@ function TeamsPage({ fplData }) {
           return (
             <motion.div key={team.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.4 }}
               whileHover={{ borderColor: "rgba(244,161,0,0.4)", boxShadow: `0 0 25px ${SAFFRON_GLOW}` }}
-              onClick={() => setSelectedTeamId(team.id)}
+              onClick={() => {
+                setSelectedTeamId(team.id);
+                setTimeout(() => top10Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 20);
+              }}
               style={{ background: CARD_BG, border: `1px solid ${selectedTeamId === team.id ? "rgba(244,161,0,0.5)" : CARD_BORDER}`, borderRadius: 16, padding: 18, transition: "all 0.25s ease", cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                 <div>
@@ -688,7 +710,7 @@ function TeamsPage({ fplData }) {
         })}
       </div>
       {selectedTeam && (
-        <div style={{ marginTop: 18, background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 18 }}>
+        <div ref={top10Ref} style={{ marginTop: 18, background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 18 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: WHITE, marginBottom: 10 }}>
             Top 10 Players • <span style={{ color: SAFFRON }}>{selectedTeam.name}</span>
           </div>
@@ -948,6 +970,7 @@ function ManagerPerformancePage({ fplData }) {
   const [entryMeta, setEntryMeta] = useState(null);
   const [transfers, setTransfers] = useState([]);
   const [gwCaptainRows, setGwCaptainRows] = useState([]);
+  const [topAverages, setTopAverages] = useState({ top10Avg: null, top100Avg: null });
   const [extraLoading, setExtraLoading] = useState(false);
 
   const eventsById = new Map((fplData?.events || []).map(e => [e.id, e]));
@@ -959,10 +982,10 @@ function ManagerPerformancePage({ fplData }) {
     const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
     monthly[key] = (monthly[key] || 0) + (gw.points || 0);
   });
-  const rows = Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 36);
+  const rows = Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0]));
   const totalPlayers = fplData?.total_players || 11000000;
   const latestGw = history?.current?.[history.current.length - 1];
-  const managerPoints = history?.past?.reduce((s, x) => s + (x.total_points || 0), 0) || latestGw?.total_points || 0;
+  const managerPoints = latestGw?.total_points || 0;
   const overallRank = latestGw?.overall_rank || null;
   const overallPct = overallRank ? ((overallRank / totalPlayers) * 100) : null;
   const currentGwRank = latestGw?.rank || null;
@@ -980,17 +1003,31 @@ function ManagerPerformancePage({ fplData }) {
     const run = async () => {
       try {
         setExtraLoading(true);
-        const [entryRes, transfersRes] = await Promise.all([
+        const [entryRes, transfersRes, topPage1Res, topPage2Res] = await Promise.all([
           fetch(API_BASE + `/entry/${entryId}/`),
-          fetch(API_BASE + `/entry/${entryId}/transfers/`)
+          fetch(API_BASE + `/entry/${entryId}/transfers/`),
+          fetch(API_BASE + `/leagues-classic/314/standings/?page_standings=1&phase=1`),
+          fetch(API_BASE + `/leagues-classic/314/standings/?page_standings=2&phase=1`)
         ]);
         const entryData = entryRes.ok ? await entryRes.json() : null;
         const transfersData = transfersRes.ok ? await transfersRes.json() : [];
+        const topPage1 = topPage1Res.ok ? await topPage1Res.json() : null;
+        const topPage2 = topPage2Res.ok ? await topPage2Res.json() : null;
         if (cancelled) return;
         setEntryMeta(entryData);
-        setTransfers(Array.isArray(transfersData) ? transfersData.slice(-10).reverse() : []);
+        setTransfers(Array.isArray(transfersData) ? [...transfersData].reverse() : []);
 
-        const gws = history.current.map((g) => g.event).slice(-12);
+        const page1Results = topPage1?.standings?.results || [];
+        const page2Results = topPage2?.standings?.results || [];
+        const top10 = page1Results.slice(0, 10);
+        const top100 = [...page1Results, ...page2Results].slice(0, 100);
+        const avg = (arr) => arr.length ? (arr.reduce((s, r) => s + (r.total || 0), 0) / arr.length) : null;
+        setTopAverages({
+          top10Avg: avg(top10),
+          top100Avg: avg(top100)
+        });
+
+        const gws = history.current.map((g) => g.event);
         const gwRows = await Promise.all(gws.map(async (gw) => {
           const [picksRes, liveRes] = await Promise.all([
             fetch(API_BASE + `/entry/${entryId}/event/${gw}/picks/`),
@@ -1014,12 +1051,12 @@ function ManagerPerformancePage({ fplData }) {
 
           return {
             gw,
-            captainName: captainPick?.is_vice_captain ? `${captainName} (VC)` : captainName,
+            captainName,
             captainPoints: captainPts,
             bestPlayer: `${bestName} (${bestPts})`
           };
         }));
-        if (!cancelled) setGwCaptainRows(gwRows.filter(Boolean).reverse());
+        if (!cancelled) setGwCaptainRows(gwRows.filter(Boolean).sort((a, b) => b.gw - a.gw));
       } finally {
         if (!cancelled) setExtraLoading(false);
       }
@@ -1057,15 +1094,15 @@ function ManagerPerformancePage({ fplData }) {
                 <div style={{ fontSize: 18, color: SAFFRON, fontWeight: 700 }}>{managerPoints}</div>
               </div>
               <div style={{ background: "rgba(255,255,255,0.03)", padding: 10, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Top Overall %</div>
-                <div style={{ fontSize: 18, color: WHITE, fontWeight: 700 }}>{overallPct ? overallPct.toFixed(2) : "—"}%</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Top 10 Avg Point</div>
+                <div style={{ fontSize: 18, color: WHITE, fontWeight: 700 }}>{topAverages.top10Avg ? topAverages.top10Avg.toFixed(1) : "—"}</div>
               </div>
               <div style={{ background: "rgba(255,255,255,0.03)", padding: 10, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Top GW(Current) %</div>
-                <div style={{ fontSize: 18, color: WHITE, fontWeight: 700 }}>{currentGwPct ? currentGwPct.toFixed(2) : "—"}%</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Top 100 Avg Point</div>
+                <div style={{ fontSize: 18, color: WHITE, fontWeight: 700 }}>{topAverages.top100Avg ? topAverages.top100Avg.toFixed(1) : "—"}</div>
               </div>
               <div style={{ background: "rgba(255,255,255,0.03)", padding: 10, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Total %</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Where are you (%)</div>
                 <div style={{ fontSize: 18, color: WHITE, fontWeight: 700 }}>{overallPct ? overallPct.toFixed(2) : "—"}%</div>
               </div>
             </div>
@@ -1077,7 +1114,7 @@ function ManagerPerformancePage({ fplData }) {
           </div>
 
           <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Monthly Performance (Available Data)</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Current Season Monthly Performance</div>
             {rows.length === 0 && (
               <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
                 Monthly historical data is not fully available for prior seasons via public API. Showing current-season monthly totals when present.
@@ -1092,7 +1129,20 @@ function ManagerPerformancePage({ fplData }) {
           </div>
 
           <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Transfer Impact (Recent)</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Last 3 Season Performance</div>
+            {!(history?.past?.length) && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>No past-season data found.</div>}
+            {(history?.past || []).slice(-3).reverse().map((s) => (
+              <div key={s.season_name} style={{ display: "grid", gridTemplateColumns: "1fr 120px 140px", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ color: WHITE, fontSize: 12 }}>{s.season_name}</div>
+                <div style={{ color: SAFFRON, fontSize: 12 }}>{s.total_points} pts</div>
+                <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12 }}>Rank {s.rank?.toLocaleString?.() || s.rank || "—"}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Transfer Impact (All, latest to oldest)</div>
+            <div style={{ maxHeight: 150, overflowY: "auto", paddingRight: 4 }}>
             {transfers.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>No transfer history available.</div>}
             {transfers.map((t, i) => {
               const inPlayer = (fplData?.elements || []).find((e) => e.id === t.element_in)?.web_name || `Player ${t.element_in}`;
@@ -1106,10 +1156,12 @@ function ManagerPerformancePage({ fplData }) {
                 </div>
               );
             })}
+            </div>
           </div>
 
           <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>GW Captaincy</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>GW Captaincy (All, latest to oldest)</div>
+            <div style={{ maxHeight: 150, overflowY: "auto", paddingRight: 4 }}>
             {extraLoading && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Loading captaincy rows...</div>}
             {!extraLoading && gwCaptainRows.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>No GW captaincy data available.</div>}
             {!extraLoading && gwCaptainRows.map((r) => (
@@ -1120,6 +1172,7 @@ function ManagerPerformancePage({ fplData }) {
                 <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12 }}>{r.bestPlayer}</div>
               </div>
             ))}
+            </div>
           </div>
         </div>
       )}
