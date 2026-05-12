@@ -55,11 +55,17 @@ function PlayerNameLabel({ name, status, style }) {
 }
 
 function getPosShort(elementType) {
-  return ["GKP", "DEF", "MID", "FWD"][Number(elementType) - 1] || "-";
+  const pos = ["GKP", "DEF", "MID", "FWD"][Number(elementType) - 1] || "-";
+  if (pos === "GKP") return "Gkp";
+  if (pos === "DEF") return "Def";
+  if (pos === "MID") return "Mid";
+  if (pos === "FWD") return "Fwd";
+  return pos;
 }
 
 function teamPosLabel(team, player) {
-  const t = team?.short_name || "-";
+  const short = team?.short_name || "-";
+  const t = short === "-" ? short : `${short.charAt(0)}${short.slice(1).toLowerCase()}`;
   const p = getPosShort(player?.element_type);
   return `${t}/${p}`;
 }
