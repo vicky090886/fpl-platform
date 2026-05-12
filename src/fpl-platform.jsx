@@ -155,7 +155,7 @@ function AnimatedNumber({ value, decimals = 0 }) {
 function Logo({ collapsed }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <img src="/fplwala-logo.png" alt="FPLwala logo" style={{ width: 48, height: 48, objectFit: "contain", padding: 2, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: `1px solid ${CARD_BORDER}` }} />
+      <img src="/fplwala.png" alt="FPLwala logo" style={{ width: 48, height: 48, objectFit: "contain", padding: 2, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: `1px solid ${CARD_BORDER}` }} />
       <AnimatePresence>
         {!collapsed && (
           <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3 }}>
@@ -974,15 +974,9 @@ function ManagerPerformancePage({ fplData }) {
   const [extraLoading, setExtraLoading] = useState(false);
 
   const eventsById = new Map((fplData?.events || []).map(e => [e.id, e]));
-  const monthly = {};
-  (history?.current || []).forEach((gw) => {
-    const dt = eventsById.get(gw.event)?.deadline_time;
-    if (!dt) return;
-    const d = new Date(dt);
-    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-    monthly[key] = (monthly[key] || 0) + (gw.points || 0);
-  });
-  const rows = Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0]));
+  const gwRowsCurrentSeason = (history?.current || [])
+    .map((gw) => ({ gw: gw.event, points: gw.points || 0 }))
+    .sort((a, b) => b.gw - a.gw);
   const totalPlayers = fplData?.total_players || 11000000;
   const latestGw = history?.current?.[history.current.length - 1];
   const managerPoints = latestGw?.total_points || 0;
@@ -1037,8 +1031,11 @@ function ManagerPerformancePage({ fplData }) {
           const picks = await picksRes.json();
           const live = await liveRes.json();
           const captainPick = (picks?.picks || []).find((x) => x.is_captain);
-          const captainName = captainPick
+          const captainBaseName = captainPick
             ? (fplData?.elements || []).find((e) => e.id === captainPick.element)?.web_name || `Player ${captainPick.element}`
+            : "N/A";
+          const captainName = captainPick
+            ? `${captainBaseName}${captainPick.multiplier === 3 ? " (TC)" : ""}`
             : "N/A";
           const captainPts = captainPick
             ? ((live?.elements || []).find((e) => e.id === captainPick.element)?.stats?.total_points || 0) * (captainPick.multiplier || 1)
@@ -1048,12 +1045,15 @@ function ManagerPerformancePage({ fplData }) {
             ? (fplData?.elements || []).find((e) => e.id === bestLive.id)?.web_name || `Player ${bestLive.id}`
             : "N/A";
           const bestPts = bestLive?.stats?.total_points || 0;
+          const liveMap = {};
+          (live?.elements || []).forEach((el) => { liveMap[el.id] = el.stats || {}; });
 
           return {
             gw,
             captainName,
             captainPoints: captainPts,
-            bestPlayer: `${bestName} (${bestPts})`
+            bestPlayer: `${bestName} (${bestPts})`,
+            liveMap
           };
         }));
         if (!cancelled) setGwCaptainRows(gwRows.filter(Boolean).sort((a, b) => b.gw - a.gw));
@@ -1114,16 +1114,16 @@ function ManagerPerformancePage({ fplData }) {
           </div>
 
           <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Current Season Monthly Performance</div>
-            {rows.length === 0 && (
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Current Season GW Performance</div>
+            {gwRowsCurrentSeason.length === 0 && (
               <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
-                Monthly historical data is not fully available for prior seasons via public API. Showing current-season monthly totals when present.
+                Current season GW data not found.
               </div>
             )}
-            {rows.length > 0 && rows.map(([month, points]) => (
-              <div key={month} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <span style={{ color: WHITE, fontSize: 13 }}>{month}</span>
-                <span style={{ color: SAFFRON, fontWeight: 700 }}>{points} pts</span>
+            {gwRowsCurrentSeason.length > 0 && gwRowsCurrentSeason.map((row) => (
+              <div key={row.gw} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <span style={{ color: WHITE, fontSize: 13 }}>GW {row.gw}</span>
+                <span style={{ color: SAFFRON, fontWeight: 700 }}>{row.points} pts</span>
               </div>
             ))}
           </div>
@@ -1141,18 +1141,28 @@ function ManagerPerformancePage({ fplData }) {
           </div>
 
           <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Transfer Impact (All, latest to oldest)</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Transfer Impact</div>
             <div style={{ maxHeight: 150, overflowY: "auto", paddingRight: 4 }}>
             {transfers.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>No transfer history available.</div>}
             {transfers.map((t, i) => {
               const inPlayer = (fplData?.elements || []).find((e) => e.id === t.element_in)?.web_name || `Player ${t.element_in}`;
               const outPlayer = (fplData?.elements || []).find((e) => e.id === t.element_out)?.web_name || `Player ${t.element_out}`;
+              const pointsFor = (elementId) => {
+                const gwPack = gwCaptainRows.find((g) => g.gw === t.event);
+                if (!gwPack || !gwPack.liveMap) return null;
+                return gwPack.liveMap[elementId]?.total_points ?? null;
+              };
+              const inPts = pointsFor(t.element_in);
+              const outPts = pointsFor(t.element_out);
+              const diff = inPts === null || outPts === null ? null : inPts - outPts;
+              const gain = diff !== null ? Math.max(diff, 0) : null;
+              const loss = diff !== null ? Math.max(-diff, 0) : null;
               return (
                 <div key={`${t.event}-${i}`} style={{ display: "grid", gridTemplateColumns: "70px 1fr 90px 90px", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                   <div style={{ color: SAFFRON, fontSize: 12 }}>GW {t.event}</div>
                   <div style={{ color: WHITE, fontSize: 12 }}>{inPlayer} ⟵ {outPlayer}</div>
-                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Gain: —</div>
-                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Loss: {t.event_transfers_cost || 0}</div>
+                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Gain: {gain === null ? "—" : gain}</div>
+                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Loss: {loss === null ? (t.event_transfers_cost || 0) : (loss + (t.event_transfers_cost || 0))}</div>
                 </div>
               );
             })}
@@ -1160,7 +1170,7 @@ function ManagerPerformancePage({ fplData }) {
           </div>
 
           <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>GW Captaincy (All, latest to oldest)</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>GW Captaincy</div>
             <div style={{ maxHeight: 150, overflowY: "auto", paddingRight: 4 }}>
             {extraLoading && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Loading captaincy rows...</div>}
             {!extraLoading && gwCaptainRows.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>No GW captaincy data available.</div>}
