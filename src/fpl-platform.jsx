@@ -27,6 +27,43 @@ function teamStripeColor(team) {
   return TEAM_COLOR_MAP[team.short_name] || SAFFRON;
 }
 
+function isSuspendedStatus(status) {
+  return status === "s";
+}
+
+function isInjuredStatus(status) {
+  return status === "i" || status === "u";
+}
+
+function PlayerStatusIcon({ status }) {
+  if (isSuspendedStatus(status)) {
+    return <span title="Suspended" style={{ fontSize: 11, lineHeight: 1, marginLeft: 4 }}>🟥</span>;
+  }
+  if (isInjuredStatus(status)) {
+    return <span title="Injured" style={{ fontSize: 11, lineHeight: 1, marginLeft: 4 }}>🩹</span>;
+  }
+  return null;
+}
+
+function PlayerNameLabel({ name, status, style }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", ...style }}>
+      <span>{name}</span>
+      <PlayerStatusIcon status={status} />
+    </span>
+  );
+}
+
+function getPosShort(elementType) {
+  return ["GKP", "DEF", "MID", "FWD"][Number(elementType) - 1] || "-";
+}
+
+function teamPosLabel(team, player) {
+  const t = team?.short_name || "-";
+  const p = getPosShort(player?.element_type);
+  return `${t}/${p}`;
+}
+
 const NAV_ITEMS = [
   { id: "dashboard", icon: "⬡", label: "Dashboard" },
   { id: "live", icon: "◉", label: "Live GW" },
@@ -155,7 +192,7 @@ function AnimatedNumber({ value, decimals = 0 }) {
 function Logo({ collapsed }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <img src="/fplwala.png" alt="FPLwala logo" style={{ width: 48, height: 48, objectFit: "contain", padding: 2, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: `1px solid ${CARD_BORDER}` }} />
+      <img src="/fplwala.png?v=3" alt="FPLwala logo" style={{ width: 48, height: 48, objectFit: "contain", padding: 2, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: `1px solid ${CARD_BORDER}` }} />
       <AnimatePresence>
         {!collapsed && (
           <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3 }}>
@@ -267,10 +304,10 @@ function PlayerRow({ player, teams, index, livePoints, onSelect, selected = fals
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: WHITE, display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 3, height: 14, borderRadius: 3, background: stripe, boxShadow: `0 0 10px ${stripe}66` }} />
-            {player.web_name}
+            <PlayerNameLabel name={player.web_name} status={player.status} />
             {isLiveScoring && <PulseDot color="#4ADE80" />}
           </div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>{team?.short_name || "—"}</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>{teamPosLabel(team, player)}</div>
         </div>
         <div style={{ fontSize: 13, color: SAFFRON, fontWeight: 700 }}>£{price}m</div>
         <div style={{ fontSize: 13, color: isLiveScoring ? "#4ADE80" : WHITE, fontWeight: isLiveScoring ? 700 : 400 }}>
@@ -459,11 +496,11 @@ function LiveGWPage({ fplData }) {
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: WHITE, display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ width: 3, height: 13, borderRadius: 3, background: stripe, boxShadow: `0 0 10px ${stripe}66` }} />
-                  {p.web_name}
+                  <PlayerNameLabel name={p.web_name} status={p.status} />
                   {isPlaying && <PulseDot color="#4ADE80" />}
                 </div>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>
-                  {team?.short_name}
+                  {teamPosLabel(team, p)}
                   {goals > 0 && <span style={{ color: "#4ADE80", marginLeft: 6 }}>⚽ {goals}</span>}
                   {assists > 0 && <span style={{ color: "#60A5FA", marginLeft: 4 }}>🅰 {assists}</span>}
                   {cs > 0 && <span style={{ color: SAFFRON, marginLeft: 4 }}>🛡 CS</span>}
@@ -500,6 +537,8 @@ function Dashboard({ fplData, fixtures }) {
   const topForm = [...(elements || [])].sort((a, b) => parseFloat(b.form) - parseFloat(a.form))[0];
   const mostIn = [...(elements || [])].sort((a, b) => b.transfers_in_event - a.transfers_in_event)[0];
   const mostOut = [...(elements || [])].sort((a, b) => b.transfers_out_event - a.transfers_out_event)[0];
+  const injuredPlayers = [...(elements || [])].filter((p) => isInjuredStatus(p.status)).sort((a, b) => b.total_points - a.total_points);
+  const suspendedPlayers = [...(elements || [])].filter((p) => isSuspendedStatus(p.status)).sort((a, b) => b.total_points - a.total_points);
   const avgPts = currentGW?.average_entry_score || 0;
   const topScore = currentGW?.highest_score || 0;
 
@@ -507,10 +546,10 @@ function Dashboard({ fplData, fixtures }) {
     { title: "Gameweek", value: currentGW?.id || "—", sub: currentGW?.name, icon: "⬡", sparkData: [30,35,28,42,38,45,41,avgPts], delay: 0.05 },
     { title: "Avg GW Score", value: avgPts, sub: "Community avg", icon: "◎", trend: 3, delay: 0.1, live: true },
     { title: "Top Score", value: topScore, sub: "This gameweek", icon: "★", trend: 8, delay: 0.15, live: true },
-    { title: "Top Player Pts", value: topPlayer?.total_points || 0, sub: topPlayer?.web_name, icon: "◈", delay: 0.2 },
-    { title: "Top Form", value: topForm?.form || 0, sub: topForm?.web_name, icon: "◉", sparkData: [3,4,5,4,6,5,7,parseFloat(topForm?.form||0)], delay: 0.25 },
-    { title: "Most Transfer In", value: mostIn?.transfers_in_event || 0, sub: mostIn?.web_name, icon: "⇌", delay: 0.3, live: true },
-    { title: "Most Transfer Out", value: mostOut?.transfers_out_event || 0, sub: mostOut?.web_name, icon: "⇌", delay: 0.35, live: true },
+    { title: "Top Player Pts", value: topPlayer?.total_points || 0, sub: <PlayerNameLabel name={topPlayer?.web_name || ""} status={topPlayer?.status} />, icon: "◈", delay: 0.2 },
+    { title: "Top Form", value: topForm?.form || 0, sub: <PlayerNameLabel name={topForm?.web_name || ""} status={topForm?.status} />, icon: "◉", sparkData: [3,4,5,4,6,5,7,parseFloat(topForm?.form||0)], delay: 0.25 },
+    { title: "Most Transfer In", value: mostIn?.transfers_in_event || 0, sub: <PlayerNameLabel name={mostIn?.web_name || ""} status={mostIn?.status} />, icon: "⇌", delay: 0.3, live: true },
+    { title: "Most Transfer Out", value: mostOut?.transfers_out_event || 0, sub: <PlayerNameLabel name={mostOut?.web_name || ""} status={mostOut?.status} />, icon: "⇌", delay: 0.35, live: true },
     { title: "Total Players", value: elements?.length || 0, sub: "In FPL pool", icon: "▦", delay: 0.4 },
   ];
 
@@ -570,7 +609,9 @@ function Dashboard({ fplData, fixtures }) {
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.5 }}
           style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 16, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: WHITE, marginBottom: 4, textAlign: "center" }}>Player Radar</div>
-          <div style={{ fontSize: 9, color: SAFFRON, marginBottom: 8, textAlign: "center" }}>{selectedRadarPlayer?.web_name || "Select a player"}</div>
+          <div style={{ fontSize: 9, color: SAFFRON, marginBottom: 8, textAlign: "center" }}>
+            {selectedRadarPlayer ? <PlayerNameLabel name={selectedRadarPlayer.web_name} status={selectedRadarPlayer.status} /> : "Select a player"}
+          </div>
           {topRadar.length > 0 && <RadarChart stats={topRadar} />}
           <div style={{ width: "100%", marginTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
@@ -591,6 +632,27 @@ function Dashboard({ fplData, fixtures }) {
         </div>
         <FixtureTicker fixtures={fixtures} teams={teams} />
       </motion.div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 18 }}>
+        <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Injury List</div>
+          {injuredPlayers.slice(0, 12).map((p) => (
+            <div key={p.id} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.85)", fontSize: 12 }}>
+              <PlayerNameLabel name={p.web_name} status={p.status} />
+            </div>
+          ))}
+          {injuredPlayers.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>No injured players flagged.</div>}
+        </div>
+        <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Suspended List</div>
+          {suspendedPlayers.slice(0, 12).map((p) => (
+            <div key={p.id} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.85)", fontSize: 12 }}>
+              <PlayerNameLabel name={p.web_name} status={p.status} />
+            </div>
+          ))}
+          {suspendedPlayers.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>No suspended players flagged.</div>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -704,7 +766,7 @@ function TeamsPage({ fplData }) {
                   </div>
                 ))}
               </div>
-              {topScorer && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}>★ <span style={{ color: SAFFRON }}>{topScorer.web_name}</span> — {topScorer.total_points} pts</div>}
+              {topScorer && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}>★ <span style={{ color: SAFFRON }}><PlayerNameLabel name={topScorer.web_name} status={topScorer.status} /></span> — {topScorer.total_points} pts</div>}
             </motion.div>
           );
         })}
@@ -717,7 +779,7 @@ function TeamsPage({ fplData }) {
           {selectedTopPlayers.map((p, idx) => (
             <div key={p.id} style={{ display: "grid", gridTemplateColumns: "26px 1fr 70px 70px", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
               <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>{idx + 1}</div>
-              <div style={{ color: WHITE, fontSize: 13 }}>{p.web_name}</div>
+              <div style={{ color: WHITE, fontSize: 13 }}><PlayerNameLabel name={p.web_name} status={p.status} /></div>
               <div style={{ color: SAFFRON, fontSize: 12 }}>{p.total_points} pts</div>
               <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>{Number(p.form || 0).toFixed(1)} form</div>
             </div>
@@ -747,8 +809,8 @@ function TransfersPage({ fplData }) {
           <motion.div key={p.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }} style={{ marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: WHITE }}>{p.web_name}</span>
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginLeft: 6 }}>{team?.short_name}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: WHITE }}><PlayerNameLabel name={p.web_name} status={p.status} /></span>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginLeft: 6 }}>{teamPosLabel(team, p)}</span>
               </div>
               <span style={{ fontSize: 12, fontWeight: 700, color }}>{val?.toLocaleString()}</span>
             </div>
@@ -824,7 +886,7 @@ function WatchlistPage({ fplData, watchlistIds, setWatchlistIds }) {
         <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} style={{ minWidth: 280, background: "rgba(255,255,255,0.04)", border: `1px solid rgba(244,161,0,0.2)`, borderRadius: 10, padding: "10px 12px", color: WHITE }}>
           <option value="">Select player</option>
           {options.map((p) => (
-            <option key={p.id} value={p.id}>{p.web_name}</option>
+            <option key={p.id} value={p.id}>{p.web_name}{isInjuredStatus(p.status) ? " [INJ]" : isSuspendedStatus(p.status) ? " [SUSP]" : ""}</option>
           ))}
         </select>
         <button onClick={addPlayer} style={{ padding: "10px 14px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${SAFFRON}, ${SAFFRON_DARK})`, color: "#0A0A0B", fontWeight: 700, cursor: "pointer" }}>Add</button>
@@ -835,7 +897,7 @@ function WatchlistPage({ fplData, watchlistIds, setWatchlistIds }) {
           const team = teams?.find((t) => t.id === p.team);
           return (
             <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr 90px 80px", gap: 10, alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <div style={{ color: WHITE, fontSize: 13 }}>{p.web_name} <span style={{ color: "rgba(255,255,255,0.45)" }}>({team?.short_name || "-"})</span></div>
+              <div style={{ color: WHITE, fontSize: 13 }}><PlayerNameLabel name={p.web_name} status={p.status} /> <span style={{ color: "rgba(255,255,255,0.45)" }}>({teamPosLabel(team, p)})</span></div>
               <div style={{ color: SAFFRON, fontSize: 12 }}>{p.total_points} pts</div>
               <button onClick={() => removePlayer(p.id)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.10)", color: "#F87171", fontSize: 11, cursor: "pointer" }}>Remove</button>
             </div>
@@ -850,7 +912,7 @@ function WatchlistPage({ fplData, watchlistIds, setWatchlistIds }) {
 function AIPage({ fplData }) {
   if (!fplData) return <LoadingSkeleton />;
   const { elements, teams } = fplData;
-  const picks = [...(elements || [])].filter(p => parseFloat(p.form) > 5 && parseFloat(p.selected_by_percent) < 20).sort((a, b) => parseFloat(b.form) - parseFloat(a.form)).slice(0, 8);
+  const picks = [...(elements || [])].filter(p => parseFloat(p.form) > 5 && parseFloat(p.selected_by_percent) < 20 && !isInjuredStatus(p.status) && !isSuspendedStatus(p.status)).sort((a, b) => parseFloat(b.form) - parseFloat(a.form)).slice(0, 8);
   return (
     <div>
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ marginBottom: 24 }}>
@@ -874,7 +936,7 @@ function AIPage({ fplData }) {
               style={{ background: "linear-gradient(135deg, rgba(244,161,0,0.06), rgba(167,139,250,0.04))", border: `1px solid rgba(244,161,0,0.2)`, borderRadius: 16, padding: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: WHITE }}>{p.web_name}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: WHITE }}><PlayerNameLabel name={p.web_name} status={p.status} /></div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{team?.name}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
@@ -940,7 +1002,7 @@ function CaptaincyPage({ fplData }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 3, height: 14, borderRadius: 3, background: stripe, boxShadow: `0 0 10px ${stripe}66` }} />
-                {p.web_name}
+                <PlayerNameLabel name={p.web_name} status={p.status} />
               </div>
               <div style={{ fontSize: 10, color: SAFFRON }}>Rank #{i + 1}</div>
             </div>
@@ -1031,22 +1093,30 @@ function ManagerPerformancePage({ fplData }) {
           const picks = await picksRes.json();
           const live = await liveRes.json();
           const captainPick = (picks?.picks || []).find((x) => x.is_captain);
+          const viceCaptainPick = (picks?.picks || []).find((x) => x.is_vice_captain);
+          const liveMap = {};
+          (live?.elements || []).forEach((el) => { liveMap[el.id] = el.stats || {}; });
           const captainBaseName = captainPick
             ? (fplData?.elements || []).find((e) => e.id === captainPick.element)?.web_name || `Player ${captainPick.element}`
             : "N/A";
+          const captainMinutes = captainPick ? (liveMap[captainPick.element]?.minutes || 0) : 0;
+          const useViceCaptain = !!(captainPick && captainMinutes < 1 && viceCaptainPick);
+          const effectiveCaptainElement = useViceCaptain ? viceCaptainPick.element : captainPick?.element;
+          const effectiveMultiplier = captainPick?.multiplier || 1;
+          const effectiveBaseName = useViceCaptain
+            ? ((fplData?.elements || []).find((e) => e.id === viceCaptainPick.element)?.web_name || `Player ${viceCaptainPick.element}`)
+            : captainBaseName;
           const captainName = captainPick
-            ? `${captainBaseName}${captainPick.multiplier === 3 ? " (TC)" : ""}`
+            ? `${effectiveBaseName}${captainPick.multiplier === 3 ? " (TC)" : ""}${useViceCaptain ? " (VC)" : ""}`
             : "N/A";
-          const captainPts = captainPick
-            ? ((live?.elements || []).find((e) => e.id === captainPick.element)?.stats?.total_points || 0) * (captainPick.multiplier || 1)
+          const captainPts = effectiveCaptainElement
+            ? (liveMap[effectiveCaptainElement]?.total_points || 0) * effectiveMultiplier
             : 0;
           const bestLive = [...(live?.elements || [])].sort((a, b) => (b.stats?.total_points || 0) - (a.stats?.total_points || 0))[0];
           const bestName = bestLive
             ? (fplData?.elements || []).find((e) => e.id === bestLive.id)?.web_name || `Player ${bestLive.id}`
             : "N/A";
           const bestPts = bestLive?.stats?.total_points || 0;
-          const liveMap = {};
-          (live?.elements || []).forEach((el) => { liveMap[el.id] = el.stats || {}; });
 
           return {
             gw,
@@ -1115,17 +1185,19 @@ function ManagerPerformancePage({ fplData }) {
 
           <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Current Season GW Performance</div>
-            {gwRowsCurrentSeason.length === 0 && (
-              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
-                Current season GW data not found.
-              </div>
-            )}
-            {gwRowsCurrentSeason.length > 0 && gwRowsCurrentSeason.map((row) => (
-              <div key={row.gw} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <span style={{ color: WHITE, fontSize: 13 }}>GW {row.gw}</span>
-                <span style={{ color: SAFFRON, fontWeight: 700 }}>{row.points} pts</span>
-              </div>
-            ))}
+            <div style={{ maxHeight: 220, overflowY: "auto", paddingRight: 4 }}>
+              {gwRowsCurrentSeason.length === 0 && (
+                <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
+                  Current season GW data not found.
+                </div>
+              )}
+              {gwRowsCurrentSeason.length > 0 && gwRowsCurrentSeason.map((row) => (
+                <div key={row.gw} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <span style={{ color: WHITE, fontSize: 13 }}>GW {row.gw}</span>
+                  <span style={{ color: SAFFRON, fontWeight: 700 }}>{row.points} pts</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
@@ -1156,13 +1228,13 @@ function ManagerPerformancePage({ fplData }) {
               const outPts = pointsFor(t.element_out);
               const diff = inPts === null || outPts === null ? null : inPts - outPts;
               const gain = diff !== null ? Math.max(diff, 0) : null;
-              const loss = diff !== null ? Math.max(-diff, 0) : null;
+              const loss = outPts;
               return (
                 <div key={`${t.event}-${i}`} style={{ display: "grid", gridTemplateColumns: "70px 1fr 90px 90px", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                   <div style={{ color: SAFFRON, fontSize: 12 }}>GW {t.event}</div>
                   <div style={{ color: WHITE, fontSize: 12 }}>{inPlayer} ⟵ {outPlayer}</div>
                   <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Gain: {gain === null ? "—" : gain}</div>
-                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Loss: {loss === null ? (t.event_transfers_cost || 0) : (loss + (t.event_transfers_cost || 0))}</div>
+                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Loss: {loss === null ? "-" : loss}</div>
                 </div>
               );
             })}
@@ -1320,6 +1392,7 @@ export default function FPLPlatform() {
     </div>
   );
 }
+
 
 
 
