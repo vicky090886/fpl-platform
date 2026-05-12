@@ -10,6 +10,18 @@ const CARD_BG = "rgba(255,255,255,0.04)";
 const CARD_BORDER = "rgba(244,161,0,0.18)";
 const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "http://localhost:3001/api" : "/api");
 
+const TEAM_COLOR_MAP = {
+  ARS: "#EF0107", AVL: "#95BFE5", BOU: "#DA291C", BRE: "#E30613", BHA: "#0057B8",
+  CHE: "#034694", CRY: "#1B458F", EVE: "#003399", FUL: "#000000", IPS: "#0057B8",
+  LEI: "#003090", LIV: "#C8102E", MCI: "#6CABDD", MUN: "#DA291C", NEW: "#241F20",
+  NFO: "#DD0000", SOU: "#D71920", TOT: "#132257", WHU: "#7A263A", WOL: "#FDB913",
+};
+
+function teamStripeColor(team) {
+  if (!team) return SAFFRON;
+  return TEAM_COLOR_MAP[team.short_name] || SAFFRON;
+}
+
 const NAV_ITEMS = [
   { id: "dashboard", icon: "⬡", label: "Dashboard" },
   { id: "live", icon: "◉", label: "Live GW" },
@@ -139,7 +151,7 @@ function AnimatedNumber({ value, decimals = 0 }) {
 function Logo({ collapsed }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <img src="/fplwala-logo.png" alt="FPLwala logo" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 8, border: `1px solid ${CARD_BORDER}` }} />
+      <img src="/fplwala-logo.png" alt="FPLwala logo" style={{ width: 48, height: 48, objectFit: "contain", padding: 2, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: `1px solid ${CARD_BORDER}` }} />
       <AnimatePresence>
         {!collapsed && (
           <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3 }}>
@@ -225,6 +237,7 @@ function MetricCard({ title, value, sub, icon, trend, sparkData, delay = 0, live
 function PlayerRow({ player, teams, index, livePoints }) {
   const [expanded, setExpanded] = useState(false);
   const team = teams?.find(t => t.id === player.team);
+  const stripe = teamStripeColor(team);
   const pos = ["GKP", "DEF", "MID", "FWD"][player.element_type - 1];
   const posColor = { GKP: "#FBBF24", DEF: "#60A5FA", MID: "#4ADE80", FWD: SAFFRON }[pos];
   const form = parseFloat(player.form || 0);
@@ -249,6 +262,7 @@ function PlayerRow({ player, teams, index, livePoints }) {
         <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${posColor}22`, border: `1.5px solid ${posColor}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, color: posColor }}>{pos}</div>
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: WHITE, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 3, height: 14, borderRadius: 3, background: stripe, boxShadow: `0 0 10px ${stripe}66` }} />
             {player.web_name}
             {isLiveScoring && <PulseDot color="#4ADE80" />}
           </div>
@@ -420,6 +434,7 @@ function LiveGWPage({ fplData }) {
 
         {topLive.map((p, i) => {
           const team = teams?.find(t => t.id === p.team);
+          const stripe = teamStripeColor(team);
           const live = liveMap[p.id];
           const gwPts = live?.total_points || 0;
           const mins = live?.minutes || 0;
@@ -439,6 +454,7 @@ function LiveGWPage({ fplData }) {
               <div style={{ fontSize: 12, fontWeight: 700, color: i < 3 ? SAFFRON : "rgba(255,255,255,0.4)" }}>{i + 1}</div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: WHITE, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 3, height: 13, borderRadius: 3, background: stripe, boxShadow: `0 0 10px ${stripe}66` }} />
                   {p.web_name}
                   {isPlaying && <PulseDot color="#4ADE80" />}
                 </div>
@@ -767,7 +783,7 @@ function AIPage({ fplData }) {
 
 function CaptaincyPage({ fplData }) {
   if (!fplData) return <LoadingSkeleton />;
-  const { elements } = fplData;
+  const { elements, teams } = fplData;
   const sorted = [...(elements || [])]
     .sort((a, b) => b.ep_next - a.ep_next)
     .slice(0, 12);
@@ -780,10 +796,17 @@ function CaptaincyPage({ fplData }) {
       </motion.div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
         {sorted.map((p, i) => (
+          (() => {
+            const team = teams?.find(t => t.id === p.team);
+            const stripe = teamStripeColor(team);
+            return (
           <motion.div key={p.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
             style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: WHITE }}>{p.web_name}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 3, height: 14, borderRadius: 3, background: stripe, boxShadow: `0 0 10px ${stripe}66` }} />
+                {p.web_name}
+              </div>
               <div style={{ fontSize: 10, color: SAFFRON }}>Rank #{i + 1}</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -797,6 +820,8 @@ function CaptaincyPage({ fplData }) {
               </div>
             </div>
           </motion.div>
+            );
+          })()
         ))}
       </div>
     </div>
@@ -975,6 +1000,9 @@ export default function FPLPlatform() {
               {renderPage()}
             </motion.div>
           </AnimatePresence>
+        </div>
+        <div style={{ position: "fixed", right: 14, bottom: 8, fontSize: 9, fontStyle: "italic", color: "rgba(255,255,255,0.65)", textShadow: "0 0 4px rgba(0,0,0,0.7)", pointerEvents: "none", zIndex: 120 }}>
+          by VS
         </div>
       </main>
     </div>
