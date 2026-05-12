@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const SAFFRON = "#F4A100";
@@ -9,6 +9,11 @@ const DARK_BG = "#0A0A0B";
 const CARD_BG = "rgba(255,255,255,0.04)";
 const CARD_BORDER = "rgba(244,161,0,0.18)";
 const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "http://localhost:3001/api" : "/api");
+const formatFixtureDate = (iso) => {
+  if (!iso) return "TBD";
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+};
 
 const TEAM_COLOR_MAP = {
   ARS: "#EF0107", AVL: "#95BFE5", BOU: "#DA291C", BRE: "#E30613", BHA: "#0057B8",
@@ -32,7 +37,6 @@ const NAV_ITEMS = [
   { id: "captaincy", icon: "★", label: "Captaincy" },
   { id: "manager", icon: "M", label: "Manager" },
   { id: "ai", icon: "◎", label: "AI Engine" },
-  { id: "differentials", icon: "◬", label: "Differentials" },
   { id: "watchlist", icon: "◉", label: "Watchlist" },
 ];
 
@@ -234,7 +238,7 @@ function MetricCard({ title, value, sub, icon, trend, sparkData, delay = 0, live
 }
 
 // ── PLAYER ROW ────────────────────────────────────────────────
-function PlayerRow({ player, teams, index, livePoints }) {
+function PlayerRow({ player, teams, index, livePoints, onSelect, selected = false }) {
   const [expanded, setExpanded] = useState(false);
   const team = teams?.find(t => t.id === player.team);
   const stripe = teamStripeColor(team);
@@ -250,12 +254,12 @@ function PlayerRow({ player, teams, index, livePoints }) {
   return (
     <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: index * 0.03, ease: [0.25, 0.46, 0.45, 0.94] }} style={{ marginBottom: 4 }}>
       <div
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => { setExpanded(!expanded); if (onSelect) onSelect(player); }}
         style={{
           display: "grid", gridTemplateColumns: "32px 1fr 60px 55px 55px 50px 80px",
           alignItems: "center", gap: 10, padding: "12px 16px",
-          background: expanded ? "rgba(244,161,0,0.07)" : isLiveScoring ? "rgba(74,222,128,0.04)" : "rgba(255,255,255,0.02)",
-          border: `1px solid ${expanded ? "rgba(244,161,0,0.3)" : isLiveScoring ? "rgba(74,222,128,0.2)" : "rgba(255,255,255,0.05)"}`,
+          background: selected ? "rgba(244,161,0,0.10)" : expanded ? "rgba(244,161,0,0.07)" : isLiveScoring ? "rgba(74,222,128,0.04)" : "rgba(255,255,255,0.02)",
+          border: `1px solid ${selected ? "rgba(244,161,0,0.5)" : expanded ? "rgba(244,161,0,0.3)" : isLiveScoring ? "rgba(74,222,128,0.2)" : "rgba(255,255,255,0.05)"}`,
           borderRadius: 10, cursor: "pointer", transition: "all 0.25s ease",
         }}
       >
@@ -488,8 +492,9 @@ function LiveGWPage({ fplData }) {
 
 // ── DASHBOARD ─────────────────────────────────────────────────
 function Dashboard({ fplData, fixtures }) {
-  if (!fplData) return <LoadingSkeleton />;
-  const { events, elements, teams } = fplData;
+  const events = fplData?.events || [];
+  const elements = fplData?.elements || [];
+  const teams = fplData?.teams || [];
   const currentGW = events?.find(e => e.is_current) || events?.find(e => e.is_next) || events?.[0];
   const topPlayer = [...(elements || [])].sort((a, b) => b.total_points - a.total_points)[0];
   const topForm = [...(elements || [])].sort((a, b) => parseFloat(b.form) - parseFloat(a.form))[0];
@@ -509,15 +514,24 @@ function Dashboard({ fplData, fixtures }) {
     { title: "Total Players", value: elements?.length || 0, sub: "In FPL pool", icon: "▦", delay: 0.4 },
   ];
 
-  const topPlayers = [...(elements || [])].sort((a, b) => b.total_points - a.total_points).slice(0, 15);
-  const topRadar = topPlayer ? [
-    { label: "Influence", value: parseFloat(topPlayer.influence || 0), max: 1500 },
-    { label: "Creativity", value: parseFloat(topPlayer.creativity || 0), max: 1500 },
-    { label: "Threat", value: parseFloat(topPlayer.threat || 0), max: 1500 },
-    { label: "ICT", value: parseFloat(topPlayer.ict_index || 0), max: 400 },
-    { label: "Form", value: parseFloat(topPlayer.form || 0), max: 15 },
-    { label: "Bonus", value: topPlayer.bonus || 0, max: 50 },
+  const topPlayers = [...elements].sort((a, b) => b.total_points - a.total_points).slice(0, 15);
+  const [radarPlayerId, setRadarPlayerId] = useState(topPlayer?.id || null);
+  useEffect(() => {
+    if (!radarPlayerId && topPlayer?.id) setRadarPlayerId(topPlayer.id);
+  }, [radarPlayerId, topPlayer]);
+  const selectedRadarPlayer = useMemo(
+    () => (elements || []).find((p) => p.id === radarPlayerId) || topPlayer,
+    [elements, radarPlayerId, topPlayer]
+  );
+  const topRadar = selectedRadarPlayer ? [
+    { label: "Influence", value: parseFloat(selectedRadarPlayer.influence || 0), max: 1500 },
+    { label: "Creativity", value: parseFloat(selectedRadarPlayer.creativity || 0), max: 1500 },
+    { label: "Threat", value: parseFloat(selectedRadarPlayer.threat || 0), max: 1500 },
+    { label: "ICT", value: parseFloat(selectedRadarPlayer.ict_index || 0), max: 400 },
+    { label: "Form", value: parseFloat(selectedRadarPlayer.form || 0), max: 15 },
+    { label: "Bonus", value: selectedRadarPlayer.bonus || 0, max: 50 },
   ] : [];
+  if (!fplData) return <LoadingSkeleton />;
 
   return (
     <div>
@@ -551,13 +565,21 @@ function Dashboard({ fplData, fixtures }) {
               <div key={i} style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{h}</div>
             ))}
           </div>
-          {topPlayers.map((p, i) => <PlayerRow key={p.id} player={p} teams={teams} index={i} />)}
+          {topPlayers.map((p, i) => <PlayerRow key={p.id} player={p} teams={teams} index={i} onSelect={() => setRadarPlayerId(p.id)} selected={p.id === selectedRadarPlayer?.id} />)}
         </motion.div>
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.5 }}
           style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 16, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: WHITE, marginBottom: 4, textAlign: "center" }}>Player Radar</div>
-          <div style={{ fontSize: 9, color: SAFFRON, marginBottom: 8, textAlign: "center" }}>{topPlayer?.web_name}</div>
+          <div style={{ fontSize: 9, color: SAFFRON, marginBottom: 8, textAlign: "center" }}>{selectedRadarPlayer?.web_name || "Select a player"}</div>
           {topRadar.length > 0 && <RadarChart stats={topRadar} />}
+          <div style={{ width: "100%", marginTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Points: <span style={{ color: WHITE }}>{selectedRadarPlayer?.total_points ?? "—"}</span></div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Price: <span style={{ color: WHITE }}>{selectedRadarPlayer ? `£${(selectedRadarPlayer.now_cost / 10).toFixed(1)}m` : "—"}</span></div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Form: <span style={{ color: WHITE }}>{selectedRadarPlayer?.form ?? "—"}</span></div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Ownership: <span style={{ color: WHITE }}>{selectedRadarPlayer ? `${selectedRadarPlayer.selected_by_percent}%` : "—"}</span></div>
+            </div>
+          </div>
         </motion.div>
       </div>
 
@@ -604,7 +626,7 @@ function PlayersPage({ fplData }) {
             <button key={p} onClick={() => setPosFilter(p)} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${posFilter === p ? SAFFRON : "rgba(255,255,255,0.1)"}`, background: posFilter === p ? "rgba(244,161,0,0.15)" : "transparent", color: posFilter === p ? SAFFRON : "rgba(255,255,255,0.5)", fontSize: 12, cursor: "pointer", transition: "all 0.2s ease" }}>{p}</button>
           ))}
         </div>
-        <select onChange={e => setSortBy(e.target.value)} value={sortBy} style={{ background: "rgba(255,255,255,0.04)", border: `1px solid rgba(244,161,0,0.2)`, borderRadius: 10, padding: "10px 14px", color: WHITE, fontSize: 12, cursor: "pointer" }}>
+        <select onChange={e => setSortBy(e.target.value)} value={sortBy} style={{ background: "#111315", border: `1px solid rgba(244,161,0,0.25)`, borderRadius: 10, padding: "10px 14px", color: WHITE, fontSize: 12, cursor: "pointer" }}>
           <option value="total_points">Sort: Total Pts</option>
           <option value="form">Sort: Form</option>
           <option value="price">Sort: Price</option>
@@ -623,8 +645,13 @@ function PlayersPage({ fplData }) {
 
 // ── TEAMS PAGE ────────────────────────────────────────────────
 function TeamsPage({ fplData }) {
+  const [selectedTeamId, setSelectedTeamId] = useState(null);
   if (!fplData) return <LoadingSkeleton />;
   const { teams, elements } = fplData;
+  const selectedTeam = teams?.find((t) => t.id === selectedTeamId) || null;
+  const selectedTopPlayers = selectedTeam
+    ? [...(elements || [])].filter((e) => e.team === selectedTeam.id).sort((a, b) => b.total_points - a.total_points).slice(0, 10)
+    : [];
   return (
     <div>
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ marginBottom: 24 }}>
@@ -638,7 +665,8 @@ function TeamsPage({ fplData }) {
           return (
             <motion.div key={team.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.4 }}
               whileHover={{ borderColor: "rgba(244,161,0,0.4)", boxShadow: `0 0 25px ${SAFFRON_GLOW}` }}
-              style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 18, transition: "all 0.25s ease" }}>
+              onClick={() => setSelectedTeamId(team.id)}
+              style={{ background: CARD_BG, border: `1px solid ${selectedTeamId === team.id ? "rgba(244,161,0,0.5)" : CARD_BORDER}`, borderRadius: 16, padding: 18, transition: "all 0.25s ease", cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 800, color: WHITE }}>{team.name}</div>
@@ -659,6 +687,21 @@ function TeamsPage({ fplData }) {
           );
         })}
       </div>
+      {selectedTeam && (
+        <div style={{ marginTop: 18, background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 18 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: WHITE, marginBottom: 10 }}>
+            Top 10 Players • <span style={{ color: SAFFRON }}>{selectedTeam.name}</span>
+          </div>
+          {selectedTopPlayers.map((p, idx) => (
+            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "26px 1fr 70px 70px", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>{idx + 1}</div>
+              <div style={{ color: WHITE, fontSize: 13 }}>{p.web_name}</div>
+              <div style={{ color: SAFFRON, fontSize: 12 }}>{p.total_points} pts</div>
+              <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>{Number(p.form || 0).toFixed(1)} form</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -706,6 +749,76 @@ function TransfersPage({ fplData }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <TransferList data={topIn} label="Most Transferred In" color="#4ADE80" />
         <TransferList data={topOut} label="Most Transferred Out" color="#F87171" />
+      </div>
+    </div>
+  );
+}
+
+function FixturesPage({ fplData, fixtures }) {
+  if (!fplData) return <LoadingSkeleton />;
+  const { teams } = fplData;
+  const upcoming = (fixtures || []).filter((f) => !f.finished).slice(0, 30);
+  const teamShort = (id) => teams?.find((t) => t.id === id)?.short_name || "?";
+
+  return (
+    <div>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: WHITE, fontFamily: "'Georgia', serif", margin: "0 0 6px" }}>Fixture <span style={{ color: SAFFRON }}>Planner</span></h1>
+        <p style={{ color: "rgba(255,255,255,0.4)", margin: 0, fontSize: 13 }}>Upcoming fixtures with gameweek and kickoff date</p>
+      </motion.div>
+      <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 16 }}>
+        {upcoming.map((f) => (
+          <div key={f.id} style={{ display: "grid", gridTemplateColumns: "70px 1fr 170px", gap: 12, padding: "10px 6px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ color: SAFFRON, fontSize: 12, fontWeight: 700 }}>GW {f.event || "—"}</div>
+            <div style={{ color: WHITE, fontSize: 13 }}>{teamShort(f.team_h)} vs {teamShort(f.team_a)}</div>
+            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>{formatFixtureDate(f.kickoff_time)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WatchlistPage({ fplData, watchlistIds, setWatchlistIds }) {
+  const [selectedId, setSelectedId] = useState("");
+  if (!fplData) return <LoadingSkeleton />;
+  const { elements, teams } = fplData;
+  const options = [...(elements || [])].sort((a, b) => a.web_name.localeCompare(b.web_name));
+  const watchPlayers = options.filter((p) => watchlistIds.includes(p.id));
+
+  const addPlayer = () => {
+    const id = Number(selectedId);
+    if (!id || watchlistIds.includes(id)) return;
+    setWatchlistIds([...watchlistIds, id]);
+  };
+  const removePlayer = (id) => setWatchlistIds(watchlistIds.filter((x) => x !== id));
+
+  return (
+    <div>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: WHITE, fontFamily: "'Georgia', serif", margin: "0 0 6px" }}>My <span style={{ color: SAFFRON }}>Watchlist</span></h1>
+      </motion.div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} style={{ minWidth: 280, background: "rgba(255,255,255,0.04)", border: `1px solid rgba(244,161,0,0.2)`, borderRadius: 10, padding: "10px 12px", color: WHITE }}>
+          <option value="">Select player</option>
+          {options.map((p) => (
+            <option key={p.id} value={p.id}>{p.web_name}</option>
+          ))}
+        </select>
+        <button onClick={addPlayer} style={{ padding: "10px 14px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${SAFFRON}, ${SAFFRON_DARK})`, color: "#0A0A0B", fontWeight: 700, cursor: "pointer" }}>Add</button>
+      </div>
+      <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 16 }}>
+        {watchPlayers.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>No players added yet.</div>}
+        {watchPlayers.map((p) => {
+          const team = teams?.find((t) => t.id === p.team);
+          return (
+            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr 90px 80px", gap: 10, alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ color: WHITE, fontSize: 13 }}>{p.web_name} <span style={{ color: "rgba(255,255,255,0.45)" }}>({team?.short_name || "-"})</span></div>
+              <div style={{ color: SAFFRON, fontSize: 12 }}>{p.total_points} pts</div>
+              <button onClick={() => removePlayer(p.id)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.10)", color: "#F87171", fontSize: 11, cursor: "pointer" }}>Remove</button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -832,6 +945,10 @@ function ManagerPerformancePage({ fplData }) {
   const [inputId, setInputId] = useState("");
   const [entryId, setEntryId] = useState("");
   const { history, loading, error } = useManagerData(entryId);
+  const [entryMeta, setEntryMeta] = useState(null);
+  const [transfers, setTransfers] = useState([]);
+  const [gwCaptainRows, setGwCaptainRows] = useState([]);
+  const [extraLoading, setExtraLoading] = useState(false);
 
   const eventsById = new Map((fplData?.events || []).map(e => [e.id, e]));
   const monthly = {};
@@ -843,6 +960,73 @@ function ManagerPerformancePage({ fplData }) {
     monthly[key] = (monthly[key] || 0) + (gw.points || 0);
   });
   const rows = Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 36);
+  const totalPlayers = fplData?.total_players || 11000000;
+  const latestGw = history?.current?.[history.current.length - 1];
+  const managerPoints = history?.past?.reduce((s, x) => s + (x.total_points || 0), 0) || latestGw?.total_points || 0;
+  const overallRank = latestGw?.overall_rank || null;
+  const overallPct = overallRank ? ((overallRank / totalPlayers) * 100) : null;
+  const currentGwRank = latestGw?.rank || null;
+  const currentGwPct = currentGwRank ? ((currentGwRank / totalPlayers) * 100) : null;
+
+  useEffect(() => {
+    if (!entryId || !history?.current?.length) {
+      setEntryMeta(null);
+      setTransfers([]);
+      setGwCaptainRows([]);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setExtraLoading(true);
+        const [entryRes, transfersRes] = await Promise.all([
+          fetch(API_BASE + `/entry/${entryId}/`),
+          fetch(API_BASE + `/entry/${entryId}/transfers/`)
+        ]);
+        const entryData = entryRes.ok ? await entryRes.json() : null;
+        const transfersData = transfersRes.ok ? await transfersRes.json() : [];
+        if (cancelled) return;
+        setEntryMeta(entryData);
+        setTransfers(Array.isArray(transfersData) ? transfersData.slice(-10).reverse() : []);
+
+        const gws = history.current.map((g) => g.event).slice(-12);
+        const gwRows = await Promise.all(gws.map(async (gw) => {
+          const [picksRes, liveRes] = await Promise.all([
+            fetch(API_BASE + `/entry/${entryId}/event/${gw}/picks/`),
+            fetch(API_BASE + `/event/${gw}/live/`)
+          ]);
+          if (!picksRes.ok || !liveRes.ok) return null;
+          const picks = await picksRes.json();
+          const live = await liveRes.json();
+          const captainPick = (picks?.picks || []).find((x) => x.is_captain);
+          const captainName = captainPick
+            ? (fplData?.elements || []).find((e) => e.id === captainPick.element)?.web_name || `Player ${captainPick.element}`
+            : "N/A";
+          const captainPts = captainPick
+            ? ((live?.elements || []).find((e) => e.id === captainPick.element)?.stats?.total_points || 0) * (captainPick.multiplier || 1)
+            : 0;
+          const bestLive = [...(live?.elements || [])].sort((a, b) => (b.stats?.total_points || 0) - (a.stats?.total_points || 0))[0];
+          const bestName = bestLive
+            ? (fplData?.elements || []).find((e) => e.id === bestLive.id)?.web_name || `Player ${bestLive.id}`
+            : "N/A";
+          const bestPts = bestLive?.stats?.total_points || 0;
+
+          return {
+            gw,
+            captainName: captainPick?.is_vice_captain ? `${captainName} (VC)` : captainName,
+            captainPoints: captainPts,
+            bestPlayer: `${bestName} (${bestPts})`
+          };
+        }));
+        if (!cancelled) setGwCaptainRows(gwRows.filter(Boolean).reverse());
+      } finally {
+        if (!cancelled) setExtraLoading(false);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [entryId, history, fplData]);
 
   return (
     <div>
@@ -864,18 +1048,79 @@ function ManagerPerformancePage({ fplData }) {
       {error && <div style={{ color: "#F87171", fontSize: 13 }}>{error}</div>}
 
       {!loading && !error && entryId && (
-        <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
-          {rows.length === 0 && (
-            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
-              Monthly historical data is not fully available for prior seasons via public API. Showing current-season monthly totals when present.
+        <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Manager Summary</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+              <div style={{ background: "rgba(255,255,255,0.03)", padding: 10, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Manager Point</div>
+                <div style={{ fontSize: 18, color: SAFFRON, fontWeight: 700 }}>{managerPoints}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", padding: 10, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Top Overall %</div>
+                <div style={{ fontSize: 18, color: WHITE, fontWeight: 700 }}>{overallPct ? overallPct.toFixed(2) : "—"}%</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", padding: 10, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Top GW(Current) %</div>
+                <div style={{ fontSize: 18, color: WHITE, fontWeight: 700 }}>{currentGwPct ? currentGwPct.toFixed(2) : "—"}%</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", padding: 10, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>Total %</div>
+                <div style={{ fontSize: 18, color: WHITE, fontWeight: 700 }}>{overallPct ? overallPct.toFixed(2) : "—"}%</div>
+              </div>
             </div>
-          )}
-          {rows.length > 0 && rows.map(([month, points]) => (
-            <div key={month} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <span style={{ color: WHITE, fontSize: 13 }}>{month}</span>
-              <span style={{ color: SAFFRON, fontWeight: 700 }}>{points} pts</span>
-            </div>
-          ))}
+            {entryMeta?.name && (
+              <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
+                Team: <span style={{ color: SAFFRON }}>{entryMeta.name}</span>
+              </div>
+            )}
+          </div>
+
+          <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Monthly Performance (Available Data)</div>
+            {rows.length === 0 && (
+              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
+                Monthly historical data is not fully available for prior seasons via public API. Showing current-season monthly totals when present.
+              </div>
+            )}
+            {rows.length > 0 && rows.map(([month, points]) => (
+              <div key={month} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <span style={{ color: WHITE, fontSize: 13 }}>{month}</span>
+                <span style={{ color: SAFFRON, fontWeight: 700 }}>{points} pts</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>Transfer Impact (Recent)</div>
+            {transfers.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>No transfer history available.</div>}
+            {transfers.map((t, i) => {
+              const inPlayer = (fplData?.elements || []).find((e) => e.id === t.element_in)?.web_name || `Player ${t.element_in}`;
+              const outPlayer = (fplData?.elements || []).find((e) => e.id === t.element_out)?.web_name || `Player ${t.element_out}`;
+              return (
+                <div key={`${t.event}-${i}`} style={{ display: "grid", gridTemplateColumns: "70px 1fr 90px 90px", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ color: SAFFRON, fontSize: 12 }}>GW {t.event}</div>
+                  <div style={{ color: WHITE, fontSize: 12 }}>{inPlayer} ⟵ {outPlayer}</div>
+                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Gain: —</div>
+                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>Loss: {t.event_transfers_cost || 0}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: WHITE, marginBottom: 8 }}>GW Captaincy</div>
+            {extraLoading && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Loading captaincy rows...</div>}
+            {!extraLoading && gwCaptainRows.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>No GW captaincy data available.</div>}
+            {!extraLoading && gwCaptainRows.map((r) => (
+              <div key={r.gw} style={{ display: "grid", gridTemplateColumns: "50px 1fr 90px 1.2fr", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ color: SAFFRON, fontSize: 12 }}>GW {r.gw}</div>
+                <div style={{ color: WHITE, fontSize: 12 }}>{r.captainName}</div>
+                <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12 }}>{r.captainPoints}</div>
+                <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12 }}>{r.bestPlayer}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -915,6 +1160,7 @@ function ComingSoon({ label }) {
 export default function FPLPlatform() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [watchlistIds, setWatchlistIds] = useState([]);
   const { data: fplData, loading, lastUpdated, refetch } = useFPLBootstrap();
   const fixtures = useFPLFixtures();
 
@@ -926,9 +1172,11 @@ export default function FPLPlatform() {
       case "players": return <PlayersPage fplData={fplData} />;
       case "teams": return <TeamsPage fplData={fplData} />;
       case "transfers": return <TransfersPage fplData={fplData} />;
+      case "fixtures": return <FixturesPage fplData={fplData} fixtures={fixtures} />;
       case "captaincy": return <CaptaincyPage fplData={fplData} />;
       case "manager": return <ManagerPerformancePage fplData={fplData} />;
       case "ai": return <AIPage fplData={fplData} />;
+      case "watchlist": return <WatchlistPage fplData={fplData} watchlistIds={watchlistIds} setWatchlistIds={setWatchlistIds} />;
       default: return <ComingSoon label={NAV_ITEMS.find(n => n.id === activeNav)?.label || activeNav} />;
     }
   };
@@ -942,6 +1190,7 @@ export default function FPLPlatform() {
         ::-webkit-scrollbar-thumb { background: rgba(244,161,0,0.3); border-radius: 2px; }
         input, select, button { font-family: inherit; }
         select { appearance: none; }
+        option { background: #111315; color: #FFFFFF; }
         @keyframes ping { 75%, 100% { transform: scale(1.8); opacity: 0; } }
       `}</style>
 
@@ -1008,6 +1257,8 @@ export default function FPLPlatform() {
     </div>
   );
 }
+
+
 
 
 
