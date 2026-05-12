@@ -84,6 +84,18 @@ function PlayerIdentityLabel({ player, team, style, showTeamPos = true }) {
   );
 }
 
+function WatchlistButton({ playerId, watchlistIds, onAdd }) {
+  if (!playerId || watchlistIds.includes(playerId)) return null;
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onAdd(playerId); }}
+      style={{ marginLeft: 8, padding: "2px 6px", borderRadius: 6, border: "1px solid rgba(244,161,0,0.35)", background: "rgba(244,161,0,0.10)", color: SAFFRON, fontSize: 10, cursor: "pointer" }}
+    >
+      + Watch
+    </button>
+  );
+}
+
 const NAV_ITEMS = [
   { id: "dashboard", icon: "⬡", label: "Dashboard" },
   { id: "live", icon: "◉", label: "Live GW" },
@@ -294,7 +306,7 @@ function MetricCard({ title, value, sub, icon, trend, sparkData, delay = 0, live
 }
 
 // ── PLAYER ROW ────────────────────────────────────────────────
-function PlayerRow({ player, teams, index, livePoints, onSelect, selected = false }) {
+function PlayerRow({ player, teams, index, livePoints, onSelect, selected = false, watchlistIds = [], onAddWatchlist = null }) {
   const [expanded, setExpanded] = useState(false);
   const team = teams?.find(t => t.id === player.team);
   const stripe = teamStripeColor(team);
@@ -324,6 +336,7 @@ function PlayerRow({ player, teams, index, livePoints, onSelect, selected = fals
           <div style={{ fontSize: 13, fontWeight: 600, color: WHITE, display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 3, height: 14, borderRadius: 3, background: stripe, boxShadow: `0 0 10px ${stripe}66` }} />
             <PlayerNameLabel name={player.web_name} status={player.status} />
+            {onAddWatchlist && <WatchlistButton playerId={player.id} watchlistIds={watchlistIds} onAdd={onAddWatchlist} />}
             {isLiveScoring && <PulseDot color="#4ADE80" />}
           </div>
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>{teamPosLabel(team, player)}</div>
@@ -411,7 +424,7 @@ function RadarChart({ stats }) {
 }
 
 // ── LIVE GW PAGE ──────────────────────────────────────────────
-function LiveGWPage({ fplData }) {
+function LiveGWPage({ fplData, watchlistIds, onAddWatchlist }) {
   const { events, elements, teams } = fplData || {};
   const currentGW = events?.find(e => e.is_current) || events?.find(e => e.is_next);
   const isActive = !!currentGW?.is_current;
@@ -516,6 +529,7 @@ function LiveGWPage({ fplData }) {
                 <div style={{ fontSize: 12, fontWeight: 600, color: WHITE, display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ width: 3, height: 13, borderRadius: 3, background: stripe, boxShadow: `0 0 10px ${stripe}66` }} />
                   <PlayerNameLabel name={p.web_name} status={p.status} />
+                  {onAddWatchlist && <WatchlistButton playerId={p.id} watchlistIds={watchlistIds} onAdd={onAddWatchlist} />}
                   {isPlaying && <PulseDot color="#4ADE80" />}
                 </div>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>
@@ -547,7 +561,7 @@ function LiveGWPage({ fplData }) {
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────
-function Dashboard({ fplData, fixtures }) {
+function Dashboard({ fplData, fixtures, watchlistIds, onAddWatchlist }) {
   const events = fplData?.events || [];
   const elements = fplData?.elements || [];
   const teams = fplData?.teams || [];
@@ -627,7 +641,7 @@ function Dashboard({ fplData, fixtures }) {
               <div key={i} style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{h}</div>
             ))}
           </div>
-          {topPlayers.map((p, i) => <PlayerRow key={p.id} player={p} teams={teams} index={i} onSelect={() => setRadarPlayerId(p.id)} selected={p.id === selectedRadarPlayer?.id} />)}
+          {topPlayers.map((p, i) => <PlayerRow key={p.id} player={p} teams={teams} index={i} onSelect={() => setRadarPlayerId(p.id)} selected={p.id === selectedRadarPlayer?.id} watchlistIds={watchlistIds} onAddWatchlist={onAddWatchlist} />)}
         </motion.div>
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.5 }}
           style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 16, padding: 16, display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -681,7 +695,7 @@ function Dashboard({ fplData, fixtures }) {
 }
 
 // ── PLAYERS PAGE ──────────────────────────────────────────────
-function PlayersPage({ fplData }) {
+function PlayersPage({ fplData, watchlistIds, onAddWatchlist }) {
   const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState("ALL");
   const [teamFilter, setTeamFilter] = useState("ALL");
@@ -741,13 +755,13 @@ function PlayersPage({ fplData }) {
           <div key={i} style={{ fontSize: 9, color: "rgba(244,161,0,0.7)", textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 700 }}>{h}</div>
         ))}
       </div>
-      {filtered.map((p, i) => <PlayerRow key={p.id} player={p} teams={teams} index={i} />)}
+      {filtered.map((p, i) => <PlayerRow key={p.id} player={p} teams={teams} index={i} watchlistIds={watchlistIds} onAddWatchlist={onAddWatchlist} />)}
     </div>
   );
 }
 
 // ── TEAMS PAGE ────────────────────────────────────────────────
-function TeamsPage({ fplData }) {
+function TeamsPage({ fplData, watchlistIds, onAddWatchlist }) {
   const [selectedTeamId, setSelectedTeamId] = useState(null);
   const top10Ref = useRef(null);
   if (!fplData) return <LoadingSkeleton />;
@@ -802,7 +816,10 @@ function TeamsPage({ fplData }) {
           {selectedTopPlayers.map((p, idx) => (
             <div key={p.id} style={{ display: "grid", gridTemplateColumns: "26px 1fr 70px 70px", gap: 10, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
               <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>{idx + 1}</div>
-              <div style={{ color: WHITE, fontSize: 13 }}><PlayerIdentityLabel player={p} team={selectedTeam} /></div>
+              <div style={{ color: WHITE, fontSize: 13, display: "inline-flex", alignItems: "center" }}>
+                <PlayerIdentityLabel player={p} team={selectedTeam} />
+                {onAddWatchlist && <WatchlistButton playerId={p.id} watchlistIds={watchlistIds} onAdd={onAddWatchlist} />}
+              </div>
               <div style={{ color: SAFFRON, fontSize: 12 }}>{p.total_points} pts</div>
               <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>{Number(p.form || 0).toFixed(1)} form</div>
             </div>
@@ -932,7 +949,7 @@ function WatchlistPage({ fplData, watchlistIds, setWatchlistIds }) {
 }
 
 // ── AI ENGINE PAGE ────────────────────────────────────────────
-function AIPage({ fplData }) {
+function AIPage({ fplData, watchlistIds, onAddWatchlist }) {
   if (!fplData) return <LoadingSkeleton />;
   const { elements, teams } = fplData;
   const picks = [...(elements || [])].filter(p => parseFloat(p.form) > 5 && parseFloat(p.selected_by_percent) < 20 && !isInjuredStatus(p.status) && !isSuspendedStatus(p.status)).sort((a, b) => parseFloat(b.form) - parseFloat(a.form)).slice(0, 8);
@@ -959,8 +976,11 @@ function AIPage({ fplData }) {
               style={{ background: "linear-gradient(135deg, rgba(244,161,0,0.06), rgba(167,139,250,0.04))", border: `1px solid rgba(244,161,0,0.2)`, borderRadius: 16, padding: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: WHITE }}><PlayerIdentityLabel player={p} team={team} /></div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{team?.name}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: WHITE, display: "inline-flex", alignItems: "center" }}>
+                    <PlayerIdentityLabel player={p} team={team} />
+                    {onAddWatchlist && <WatchlistButton playerId={p.id} watchlistIds={watchlistIds} onAdd={onAddWatchlist} />}
+                  </div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{teamPosLabel(team, p)}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 20, fontWeight: 800, color: SAFFRON }}>{diffScore}</div>
@@ -1333,21 +1353,22 @@ export default function FPLPlatform() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [watchlistIds, setWatchlistIds] = useState([]);
+  const addWatchlist = (id) => setWatchlistIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   const { data: fplData, loading, lastUpdated, refetch } = useFPLBootstrap();
   const fixtures = useFPLFixtures();
 
   const renderPage = () => {
     if (loading) return <LoadingSkeleton />;
     switch (activeNav) {
-      case "dashboard": return <Dashboard fplData={fplData} fixtures={fixtures} />;
-      case "live": return <LiveGWPage fplData={fplData} />;
-      case "players": return <PlayersPage fplData={fplData} />;
-      case "teams": return <TeamsPage fplData={fplData} />;
+      case "dashboard": return <Dashboard fplData={fplData} fixtures={fixtures} watchlistIds={watchlistIds} onAddWatchlist={addWatchlist} />;
+      case "live": return <LiveGWPage fplData={fplData} watchlistIds={watchlistIds} onAddWatchlist={addWatchlist} />;
+      case "players": return <PlayersPage fplData={fplData} watchlistIds={watchlistIds} onAddWatchlist={addWatchlist} />;
+      case "teams": return <TeamsPage fplData={fplData} watchlistIds={watchlistIds} onAddWatchlist={addWatchlist} />;
       case "transfers": return <TransfersPage fplData={fplData} />;
       case "fixtures": return <FixturesPage fplData={fplData} fixtures={fixtures} />;
       case "captaincy": return <CaptaincyPage fplData={fplData} />;
       case "manager": return <ManagerPerformancePage fplData={fplData} />;
-      case "ai": return <AIPage fplData={fplData} />;
+      case "ai": return <AIPage fplData={fplData} watchlistIds={watchlistIds} onAddWatchlist={addWatchlist} />;
       case "watchlist": return <WatchlistPage fplData={fplData} watchlistIds={watchlistIds} setWatchlistIds={setWatchlistIds} />;
       default: return <ComingSoon label={NAV_ITEMS.find(n => n.id === activeNav)?.label || activeNav} />;
     }
