@@ -192,7 +192,6 @@ function AnimatedNumber({ value, decimals = 0 }) {
 function Logo({ collapsed }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <img src="/fplwala.png?v=3" alt="FPLwala logo" style={{ width: 48, height: 48, objectFit: "contain", padding: 2, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: `1px solid ${CARD_BORDER}` }} />
       <AnimatePresence>
         {!collapsed && (
           <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3 }}>
