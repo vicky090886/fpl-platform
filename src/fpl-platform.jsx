@@ -8,7 +8,7 @@ const WHITE = "#FFFFFF";
 const DARK_BG = "#0A0A0B";
 const CARD_BG = "rgba(255,255,255,0.04)";
 const CARD_BORDER = "rgba(244,161,0,0.18)";
-const API_BASE = "http://localhost:3001/api";
+const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "http://localhost:3001/api" : "/api");
 
 const NAV_ITEMS = [
   { id: "dashboard", icon: "⬡", label: "Dashboard" },
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { id: "transfers", icon: "⇌", label: "Transfers" },
   { id: "fixtures", icon: "▦", label: "Fixtures" },
   { id: "captaincy", icon: "★", label: "Captaincy" },
+  { id: "manager", icon: "M", label: "Manager" },
   { id: "ai", icon: "◎", label: "AI Engine" },
   { id: "differentials", icon: "◬", label: "Differentials" },
   { id: "watchlist", icon: "◉", label: "Watchlist" },
@@ -86,6 +87,35 @@ function useLiveGW(gwId, isActive) {
   return { liveData, liveLoading, pollCount, lastPoll, refetch: fetchLive };
 }
 
+function useManagerData(entryId) {
+  const [history, setHistory] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!entryId) {
+      setHistory(null);
+      setError("");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    fetch(API_BASE + `/entry/${entryId}/history/`)
+      .then(r => {
+        if (!r.ok) throw new Error("Manager not found");
+        return r.json();
+      })
+      .then(d => setHistory(d))
+      .catch((e) => {
+        setHistory(null);
+        setError(e.message || "Failed to fetch manager data");
+      })
+      .finally(() => setLoading(false));
+  }, [entryId]);
+
+  return { history, loading, error };
+}
+
 // ── ANIMATED NUMBER ────────────────────────────────────────────
 function AnimatedNumber({ value, decimals = 0 }) {
   const [display, setDisplay] = useState(0);
@@ -109,30 +139,7 @@ function AnimatedNumber({ value, decimals = 0 }) {
 function Logo({ collapsed }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-        <defs>
-          <radialGradient id="lg" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={SAFFRON} stopOpacity="0.25"/>
-            <stop offset="100%" stopColor={SAFFRON} stopOpacity="0"/>
-          </radialGradient>
-          <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#FFF" stopOpacity="0.95"/>
-            <stop offset="100%" stopColor="#E8E8E8" stopOpacity="0.9"/>
-          </linearGradient>
-        </defs>
-        <path d="M20 2 L34 10 L34 30 L20 38 L6 30 L6 10 Z" fill="#0A0A0B" stroke={SAFFRON} strokeWidth="1.6" strokeLinejoin="round"/>
-        <path d="M20 2 L34 10 L34 30 L20 38 L6 30 L6 10 Z" fill="url(#lg)"/>
-        <circle cx="20" cy="20" r="9" fill="url(#bg)" stroke="rgba(0,0,0,0.15)" strokeWidth="0.5"/>
-        <path d="M20 14 L22.9 16.1 L21.9 19.5 L18.1 19.5 L17.1 16.1 Z" fill="#1A1A1A"/>
-        <path d="M20 11.2 L22.2 12.8 L21.5 14 L18.5 14 L17.8 12.8 Z" fill="#1A1A1A"/>
-        <path d="M24.8 13.5 L26.2 15.8 L24.8 16.8 L23.2 15.6 L23.8 13.8 Z" fill="#1A1A1A"/>
-        <path d="M25.5 21.5 L26.2 24 L24.2 25.2 L22.8 24 L23.5 21.8 Z" fill="#1A1A1A"/>
-        <path d="M14.5 21.5 L16.5 21.8 L17.2 24 L15.8 25.2 L13.8 24 Z" fill="#1A1A1A"/>
-        <path d="M15.2 13.5 L16.2 13.8 L16.8 15.6 L15.2 16.8 L13.8 15.8 Z" fill="#1A1A1A"/>
-        <path d="M18.5 26 L20 27.5 L21.5 26 L21.2 24.2 L18.8 24.2 Z" fill="#1A1A1A"/>
-        <ellipse cx="17.5" cy="16.5" rx="2.5" ry="1.5" fill="white" opacity="0.35" transform="rotate(-20 17.5 16.5)"/>
-        <line x1="11" y1="34.5" x2="29" y2="34.5" stroke={SAFFRON} strokeWidth="1.5" strokeLinecap="round" opacity="0.6"/>
-      </svg>
+      <img src="/fplwala-logo.png" alt="FPLwala logo" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 8, border: `1px solid ${CARD_BORDER}` }} />
       <AnimatePresence>
         {!collapsed && (
           <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3 }}>
@@ -758,6 +765,98 @@ function AIPage({ fplData }) {
   );
 }
 
+function CaptaincyPage({ fplData }) {
+  if (!fplData) return <LoadingSkeleton />;
+  const { elements } = fplData;
+  const sorted = [...(elements || [])]
+    .sort((a, b) => b.ep_next - a.ep_next)
+    .slice(0, 12);
+
+  return (
+    <div>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: WHITE, fontFamily: "'Georgia', serif", margin: "0 0 6px" }}>Captaincy <span style={{ color: SAFFRON }}>Model</span></h1>
+        <p style={{ color: "rgba(255,255,255,0.4)", margin: 0, fontSize: 13 }}>Simple expected-points shortlist from official FPL data</p>
+      </motion.div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
+        {sorted.map((p, i) => (
+          <motion.div key={p.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+            style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: WHITE }}>{p.web_name}</div>
+              <div style={{ fontSize: 10, color: SAFFRON }}>Rank #{i + 1}</div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "8px 10px" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>EP Next</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: SAFFRON }}>{Number(p.ep_next || 0).toFixed(1)}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "8px 10px" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>Form</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: WHITE }}>{Number(p.form || 0).toFixed(1)}</div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ManagerPerformancePage({ fplData }) {
+  const [inputId, setInputId] = useState("");
+  const [entryId, setEntryId] = useState("");
+  const { history, loading, error } = useManagerData(entryId);
+
+  const eventsById = new Map((fplData?.events || []).map(e => [e.id, e]));
+  const monthly = {};
+  (history?.current || []).forEach((gw) => {
+    const dt = eventsById.get(gw.event)?.deadline_time;
+    if (!dt) return;
+    const d = new Date(dt);
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    monthly[key] = (monthly[key] || 0) + (gw.points || 0);
+  });
+  const rows = Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 36);
+
+  return (
+    <div>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: WHITE, fontFamily: "'Georgia', serif", margin: "0 0 6px" }}>Manager <span style={{ color: SAFFRON }}>Performance</span></h1>
+        <p style={{ color: "rgba(255,255,255,0.4)", margin: 0, fontSize: 13 }}>Monthly points for last 3 years where FPL exposes gameweek history</p>
+      </motion.div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        <input value={inputId} onChange={(e) => setInputId(e.target.value)} placeholder="Enter Manager Entry ID"
+          style={{ width: 280, background: "rgba(255,255,255,0.04)", border: `1px solid rgba(244,161,0,0.2)`, borderRadius: 10, padding: "10px 14px", color: WHITE, fontSize: 13, outline: "none" }} />
+        <button onClick={() => setEntryId(inputId.trim())}
+          style={{ padding: "10px 14px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${SAFFRON}, ${SAFFRON_DARK})`, color: "#0A0A0B", fontWeight: 700, cursor: "pointer" }}>
+          Load
+        </button>
+      </div>
+
+      {loading && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Loading manager data...</div>}
+      {error && <div style={{ color: "#F87171", fontSize: 13 }}>{error}</div>}
+
+      {!loading && !error && entryId && (
+        <div style={{ background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: 16 }}>
+          {rows.length === 0 && (
+            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
+              Monthly historical data is not fully available for prior seasons via public API. Showing current-season monthly totals when present.
+            </div>
+          )}
+          {rows.length > 0 && rows.map(([month, points]) => (
+            <div key={month} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <span style={{ color: WHITE, fontSize: 13 }}>{month}</span>
+              <span style={{ color: SAFFRON, fontWeight: 700 }}>{points} pts</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── LOADING ───────────────────────────────────────────────────
 function LoadingSkeleton() {
   return (
@@ -802,6 +901,8 @@ export default function FPLPlatform() {
       case "players": return <PlayersPage fplData={fplData} />;
       case "teams": return <TeamsPage fplData={fplData} />;
       case "transfers": return <TransfersPage fplData={fplData} />;
+      case "captaincy": return <CaptaincyPage fplData={fplData} />;
+      case "manager": return <ManagerPerformancePage fplData={fplData} />;
       case "ai": return <AIPage fplData={fplData} />;
       default: return <ComingSoon label={NAV_ITEMS.find(n => n.id === activeNav)?.label || activeNav} />;
     }
@@ -879,3 +980,6 @@ export default function FPLPlatform() {
     </div>
   );
 }
+
+
+
