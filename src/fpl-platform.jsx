@@ -1443,6 +1443,33 @@ export default function FPLPlatform() {
             </motion.div>
           </AnimatePresence>
         </div>
+        <section
+          style={{
+            margin: "0 28px 40px",
+            padding: "20px",
+            borderRadius: 14,
+            border: `1px solid ${CARD_BORDER}`,
+            background: "rgba(255,255,255,0.02)",
+          }}
+        >
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: WHITE, margin: "0 0 10px", fontFamily: "'Georgia', serif" }}>
+            Fantasy Premier League Analytics and Insights
+          </h2>
+          <p style={{ fontSize: 14, lineHeight: 1.6, color: "rgba(255,255,255,0.75)", margin: "0 0 10px" }}>
+            FPLwala is a Fantasy Premier League analytics platform for tracking player performance, manager history,
+            captain picks, transfer decisions, fixture difficulty, and live gameweek trends from official FPL data.
+          </p>
+          <p style={{ fontSize: 14, lineHeight: 1.6, color: "rgba(255,255,255,0.7)", margin: "0 0 14px" }}>
+            Use the dashboard for overall trends, explore player stats for form and value, compare fixtures for upcoming gameweeks,
+            and review manager analytics to improve weekly FPL decisions.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => setActiveNav("players")} style={{ border: `1px solid ${CARD_BORDER}`, background: "rgba(244,161,0,0.08)", color: SAFFRON, borderRadius: 999, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Player Stats</button>
+            <button onClick={() => setActiveNav("fixtures")} style={{ border: `1px solid ${CARD_BORDER}`, background: "rgba(244,161,0,0.08)", color: SAFFRON, borderRadius: 999, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Fixture Analysis</button>
+            <button onClick={() => setActiveNav("captaincy")} style={{ border: `1px solid ${CARD_BORDER}`, background: "rgba(244,161,0,0.08)", color: SAFFRON, borderRadius: 999, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Captain Picks</button>
+            <button onClick={() => setActiveNav("manager")} style={{ border: `1px solid ${CARD_BORDER}`, background: "rgba(244,161,0,0.08)", color: SAFFRON, borderRadius: 999, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Manager Tracking</button>
+          </div>
+        </section>
         <div style={{ position: "fixed", right: 14, bottom: 8, fontSize: 9, fontStyle: "italic", color: "rgba(255,255,255,0.65)", textShadow: "0 0 4px rgba(0,0,0,0.7)", pointerEvents: "none", zIndex: 120 }}>
           by VS
         </div>
